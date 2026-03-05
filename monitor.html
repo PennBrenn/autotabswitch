@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FaceGuard Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #07090f;
+      color: #94a3b8;
+      font: 12px/1.5 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    #dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #1e293b;
+      transition: background 0.4s;
+    }
+    #dot.loading { background: #f59e0b; animation: pulse 1s ease-in-out infinite alternate; }
+    #dot.watching { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+    #dot.alert { background: #ef4444; animation: pulse 0.4s ease-in-out infinite alternate; }
+    @keyframes pulse { from { opacity:1 } to { opacity:0.3 } }
+    #label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; }
+    video { display: none; }
+    canvas { display: none; }
+    #preview {
+      width: 240px; height: 135px;
+      border: 1px solid #1e2d3d;
+      border-radius: 4px;
+      object-fit: cover;
+      background: #0f1520;
+      margin-bottom: 14px;
+    }
+    #info {
+      font-size: 10px;
+      color: #334155;
+      text-align: center;
+      letter-spacing: 1px;
+      line-height: 1.8;
+    }
+    #error-box {
+      display: none;
+      background: #1a0a0a;
+      border: 1px solid #3b1515;
+      border-radius: 6px;
+      padding: 14px 18px;
+      max-width: 300px;
+      color: #ef4444;
+      font-size: 11px;
+      text-align: center;
+      line-height: 1.7;
+    }
+    a { color: #3b82f6; }
+  </style>
+</head>
+<body>
+
+<div id="status-row">
+  <div id="dot" class="loading"></div>
+  <span id="label">Initializing…</span>
+</div>
+
+<video id="video" autoplay muted playsinline width="240" height="135"></video>
+<canvas id="canvas" width="240" height="135"></canvas>
+<video id="preview-video" autoplay muted playsinline width="240" height="135" style="
+  width:240px;height:135px;border:1px solid #1e2d3d;border-radius:4px;
+  object-fit:cover;background:#0f1520;margin-bottom:14px;
+"></video>
+
+<div id="info">FACEGUARD MONITOR<br>KEEP THIS WINDOW OPEN</div>
+<div id="error-box"></div>
+
+<script>
+'use strict';
+
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+
+const dot    = document.getElementById('dot');
+const label  = document.getElementById('label');
+const video  = document.getElementById('video');
+const prevV  = document.getElementById('preview-video');
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+const errBox = document.getElementById('error-box');
+
+let stream = null;
+let modelsLoaded = false;
+let loopTimer = null;
+let settings = { interval: 3, sensitivity: 60, brightness: 100, noFaceAction: 'ignore' };
+
+function setStatus(state, text) {
+  dot.className = state;
+  label.textContent = text;
+}
+
+function showError(msg) {
+  errBox.style.display = 'block';
+  errBox.innerHTML = msg;
+  setStatus('', 'ERROR');
+}
+
+async function init() {
+  // 1. Load settings
+  await new Promise(resolve => {
+    chrome.storage.local.get('settings', (data) => {
+      if (data.settings) settings = { ...settings, ...data.settings };
+      resolve();
+    });
+  });
+
+  // 2. Load models
+  setStatus('loading', 'Loading models…');
+  if (typeof faceapi === 'undefined') {
+    showError('face-api.js failed to load.<br>Check your internet connection or see README for offline setup.<br><a href="https://github.com/justadudewhohacks/face-api.js" target="_blank">face-api.js</a>');
+    chrome.runtime.sendMessage({ type: 'MONITOR_ERROR' });
+    return;
+  }
+
+  try {
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+    ]);
+    modelsLoaded = true;
+  } catch (e) {
+    showError('Failed to load face recognition models.<br>Check your internet connection.<br><small>' + e.message + '</small>');
+    chrome.runtime.sendMessage({ type: 'MONITOR_ERROR' });
+    return;
+  }
+
+  // 3. Start camera
+  setStatus('loading', 'Requesting camera…');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 240, height: 135, facingMode: 'user' },
+      audio: false
+    });
+    video.srcObject = stream;
+    prevV.srcObject = stream;
+    await new Promise(r => { video.onloadedmetadata = r; });
+    video.play();
+    prevV.play();
+  } catch (e) {
+    showError('Camera access denied.<br>Grant camera permission to the extension.');
+    chrome.runtime.sendMessage({ type: 'MONITOR_ERROR' });
+    return;
+  }
+
+  setStatus('watching', 'Monitoring…');
+  chrome.runtime.sendMessage({ type: 'MONITOR_READY' });
+
+  // 4. Start detection loop
+  scheduleCheck();
+}
+
+function scheduleCheck() {
+  const interval = (settings.interval || 3) * 1000;
+  loopTimer = setTimeout(async () => {
+    await checkFace();
+    scheduleCheck();
+  }, interval);
+}
+
+async function checkFace() {
+  if (!modelsLoaded || !stream) return;
+
+  // Refresh settings each cycle
+  await new Promise(r => chrome.storage.local.get('settings', (d) => {
+    if (d.settings) settings = { ...settings, ...d.settings };
+    r();
+  }));
+
+  // Draw frame with optional brightness
+  const brightness = (settings.brightness || 100) / 100;
+  ctx.filter = brightness !== 1.0 ? `brightness(${brightness})` : 'none';
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.filter = 'none';
+
+  let detections;
+  try {
+    detections = await faceapi
+      .detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.3 }))
+      .withFaceLandmarks()
+      .withFaceDescriptors();
+  } catch (e) {
+    return;
+  }
+
+  if (!detections || detections.length === 0) {
+    chrome.runtime.sendMessage({ type: 'FACE_RESULT', faceDetected: false, authorized: true, faceCount: 0 });
+    setStatus('watching', 'No face detected');
+    return;
+  }
+
+  // Load face profile
+  const profileData = await new Promise(r => chrome.storage.local.get('faceProfile', r));
+  const profile = profileData.faceProfile;
+
+  if (!profile || profile.length === 0) {
+    chrome.runtime.sendMessage({ type: 'FACE_RESULT', faceDetected: true, authorized: true, faceCount: detections.length, message: 'No profile' });
+    setStatus('watching', `Face seen — no profile`);
+    return;
+  }
+
+  // Compute euclidean threshold from sensitivity (0–100)
+  // sensitivity 100 → threshold 0.3 (strict), sensitivity 0 → threshold 0.8 (loose)
+  const sensitivity = settings.sensitivity || 60;
+  const threshold = 0.3 + ((100 - sensitivity) / 100) * 0.5;
+
+  const labeledDescriptors = [
+    new faceapi.LabeledFaceDescriptors('owner', profile.map(d => new Float32Array(d)))
+  ];
+  const matcher = new faceapi.FaceMatcher(labeledDescriptors, threshold);
+
+  let authorized = true;
+  for (const det of detections) {
+    const match = matcher.findBestMatch(det.descriptor);
+    if (match.label === 'unknown') {
+      authorized = false;
+      break;
+    }
+  }
+
+  chrome.runtime.sendMessage({
+    type: 'FACE_RESULT',
+    faceDetected: true,
+    authorized,
+    faceCount: detections.length
+  });
+
+  if (!authorized) {
+    setStatus('alert', `⚠ Unauthorized face!`);
+  } else {
+    setStatus('watching', `✓ ${detections.length} authorized face${detections.length > 1 ? 's' : ''}`);
+  }
+}
+
+// Listen for settings updates
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'SETTINGS_UPDATED') {
+    settings = { ...settings, ...msg.settings };
+    // Reschedule loop with new interval
+    if (loopTimer) {
+      clearTimeout(loopTimer);
+      scheduleCheck();
+    }
+  }
+});
+
+init();
+</script>
+</body>
+</html>

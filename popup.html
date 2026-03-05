@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FaceGuard</title>
+  <style>
+    /* ── Reset & Variables ─────────────────────────────────── */
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg:        #07090f;
+      --surface:   #0d1220;
+      --surface2:  #111827;
+      --border:    #1a2535;
+      --border2:   #243044;
+      --green:     #22c55e;
+      --green-dim: #166534;
+      --red:       #ef4444;
+      --amber:     #f59e0b;
+      --blue:      #3b82f6;
+      --text:      #e2e8f0;
+      --muted:     #475569;
+      --muted2:    #334155;
+      --mono: 'Courier New', Courier, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      width: 380px;
+      min-height: 500px;
+      user-select: none;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-icon {
+      width: 28px; height: 28px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .logo-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 3px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .logo-version {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      transition: all 0.3s;
+    }
+    .status-badge.watching { border-color: var(--green-dim); color: var(--green); }
+    .status-badge.alert    { border-color: #7f1d1d; color: var(--red); animation: blink 0.6s ease-in-out infinite alternate; }
+    .status-badge.loading  { border-color: #78350f; color: var(--amber); }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--muted2);
+      transition: background 0.3s;
+    }
+    .status-badge.watching .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-badge.alert    .status-dot { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    .status-badge.loading  .status-dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+    @keyframes blink { from{opacity:1} to{opacity:0.4} }
+
+    /* ── Guard Card ─────────────────────────────────────────── */
+    .guard-card {
+      margin: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .shield-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .shield-bg {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      border: 2px solid var(--border2);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      transition: all 0.4s;
+    }
+    .shield-bg.watching { border-color: var(--green); box-shadow: 0 0 20px #22c55e33; }
+    .shield-bg.alert    { border-color: var(--red); box-shadow: 0 0 20px #ef444433; animation: blink 0.5s ease-in-out infinite alternate; }
+    .shield-bg.loading  { border-color: var(--amber); }
+
+    .guard-info { flex: 1; min-width: 0; }
+    .guard-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .guard-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+    .guard-meta {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .meta-item {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .meta-item span {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* ── Toggle Switch ──────────────────────────────────────── */
+    .toggle-wrap {
+      flex-shrink: 0;
+    }
+    .toggle {
+      position: relative;
+      width: 44px; height: 24px;
+      cursor: pointer;
+    }
+    .toggle input { display: none; }
+    .toggle-track {
+      width: 44px; height: 24px;
+      background: var(--border2);
+      border-radius: 12px;
+      transition: background 0.3s;
+      border: 1px solid var(--border2);
+    }
+    .toggle input:checked + .toggle-track { background: var(--green); border-color: var(--green); }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .toggle input:checked ~ .toggle-thumb { transform: translateX(20px); }
+
+    /* ── Tabs ───────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+    }
+    .tab-btn {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      padding: 8px 14px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--text); border-bottom-color: var(--blue); }
+
+    /* ── Tab Content ────────────────────────────────────────── */
+    .tab-content { display: none; padding: 14px 16px 16px; }
+    .tab-content.active { display: block; }
+
+    /* ── Form Controls ──────────────────────────────────────── */
+    .field { margin-bottom: 14px; }
+    .field-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .field-label .field-val {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Segmented control */
+    .seg-control {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px;
+      gap: 1px;
+    }
+    .seg-btn {
+      flex: 1;
+      padding: 6px 4px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: var(--muted);
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .seg-btn:hover { color: var(--text); }
+    .seg-btn.active {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border2);
+    }
+
+    /* Slider */
+    .slider-row { display: flex; align-items: center; gap: 10px; }
+    input[type=range] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--border2);
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--blue);
+      cursor: pointer;
+      border: 2px solid var(--bg);
+      box-shadow: 0 0 6px #3b82f644;
+    }
+    .slider-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      width: 28px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Text input */
+    .text-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .text-input:focus { border-color: var(--blue); }
+    .text-input::placeholder { color: var(--muted2); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border2);
+      background: var(--surface2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { border-color: var(--blue); color: var(--blue); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.danger:hover { border-color: var(--red); color: var(--red); }
+    .btn.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    .btn.primary:hover { background: #2563eb; }
+    .btn.success {
+      background: var(--green-dim);
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    /* ── Train Tab ──────────────────────────────────────────── */
+    .cam-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    #train-video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* mirror */
+    }
+    #train-canvas { display: none; }
+    .cam-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--surface);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .cam-overlay.hidden { display: none; }
+
+    .capture-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .sample-count {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .sample-count span { color: var(--green); font-weight: 600; }
+    .sample-pips {
+      display: flex;
+      gap: 3px;
+    }
+    .pip {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border2);
+      transition: background 0.2s;
+    }
+    .pip.filled { background: var(--green); }
+
+    .train-hint {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.6;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    /* ── Stats Tab ──────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+    .stat-value.red   { color: var(--red); }
+    .stat-value.green { color: var(--green); }
+    .stat-sub {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+    /* Alert strip */
+    .alert-strip {
+      display: none;
+      background: #1a0a0a;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--red);
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      animation: blink 0.6s ease-in-out infinite alternate;
+    }
+    .alert-strip.visible { display: block; }
+
+    /* Profile badge */
+    .profile-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      margin-bottom: 12px;
+    }
+    .profile-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--muted2);
+    }
+    .profile-dot.ok { background: var(--green); }
+    .profile-text {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⊙</div>
+    <div>
+      <div class="logo-text">FACEGUARD</div>
+      <div class="logo-version">v1.0.0</div>
+    </div>
+  </div>
+  <div class="status-badge" id="status-badge">
+    <div class="status-dot"></div>
+    <span id="status-text">IDLE</span>
+  </div>
+</div>
+
+<!-- Guard Card -->
+<div class="guard-card">
+  <div class="shield-wrap">
+    <div class="shield-bg" id="shield">⊙</div>
+  </div>
+  <div class="guard-info">
+    <div class="guard-title" id="guard-title">Protection Off</div>
+    <div class="guard-sub" id="guard-sub">Toggle to start monitoring</div>
+    <div class="guard-meta">
+      <div class="meta-item">Alerts: <span id="stat-alerts">0</span></div>
+      <div class="meta-item">Last: <span id="stat-last">—</span></div>
+    </div>
+  </div>
+  <div class="toggle-wrap">
+    <label class="toggle">
+      <input type="checkbox" id="master-toggle">
+      <div class="toggle-track"></div>
+      <div class="toggle-thumb"></div>
+    </label>
+  </div>
+</div>
+
+<!-- Alert strip -->
+<div class="alert-strip" id="alert-strip">⚠ UNAUTHORIZED FACE DETECTED</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="settings">Settings</button>
+  <button class="tab-btn" data-tab="train">Train</button>
+  <button class="tab-btn" data-tab="stats">Stats</button>
+</div>
+
+<!-- ── SETTINGS TAB ─────────────────────────────────────────── -->
+<div class="tab-content active" id="tab-settings">
+
+  <div class="field">
+    <div class="field-label">Response Mode</div>
+    <div class="seg-control">
+      <button class="seg-btn active" data-mode="switch">Tab Switch</button>
+      <button class="seg-btn" data-mode="warn">Warning</button>
+      <button class="seg-btn" data-mode="both">Both</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">
+      Check Interval
+      <span class="field-val" id="interval-val">3s</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">1s</span>
+      <input type="range" id="interval-slider" min="1" max="15" step="1" value="3">
+      <span class="slider-label">15s</span>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">
+      Match Sensitivity
+      <span class="field-val" id="sensitivity-val">60%</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Low</span>
+      <input type="range" id="sensitivity-slider" min="10" max="95" step="5" value="60">
+      <span class="slider-label">High</span>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">
+      Camera Brightness
+      <span class="field-val" id="brightness-val">100%</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">50%</span>
+      <input type="range" id="brightness-slider" min="50" max="150" step="5" value="100">
+      <span class="slider-label">150%</span>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">No-Face Action</div>
+    <div class="seg-control">
+      <button class="seg-btn active" data-noface="ignore">Ignore</button>
+      <button class="seg-btn" data-noface="trigger">Trigger</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Decoy Tab URL</div>
+    <input class="text-input" id="decoy-url" type="text" placeholder="about:blank or https://…" value="about:blank">
+  </div>
+
+  <button class="btn primary" id="save-btn" style="width:100%; margin-top:4px;">
+    Save Settings
+  </button>
+
+</div>
+
+<!-- ── TRAIN TAB ───────────────────────────────────────────── -->
+<div class="tab-content" id="tab-train">
+
+  <div class="profile-badge">
+    <div class="profile-dot" id="profile-dot"></div>
+    <div class="profile-text" id="profile-text">No profile enrolled</div>
+  </div>
+
+  <div class="cam-wrap">
+    <video id="train-video" autoplay muted playsinline></video>
+    <canvas id="train-canvas"></canvas>
+    <div class="cam-overlay" id="cam-overlay">
+      <span style="font-size:24px;">⊙</span>
+      <span>Camera off</span>
+    </div>
+  </div>
+
+  <div class="capture-bar">
+    <div class="sample-count">Samples: <span id="sample-count">0</span> / 10</div>
+    <div class="sample-pips" id="sample-pips">
+      <!-- filled dynamically -->
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" id="cam-btn" style="flex:1">Start Camera</button>
+    <button class="btn" id="capture-btn" disabled style="flex:1">Capture</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn" id="save-profile-btn" disabled style="flex:1">Save Profile</button>
+    <button class="btn danger" id="clear-profile-btn" style="flex:1">Clear Profile</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="train-hint">
+    Position your face clearly, then click <strong style="color:var(--text)">Capture</strong> 5–10 times from different angles. Click <strong style="color:var(--text)">Save Profile</strong> when done.
+  </div>
+
+</div>
+
+<!-- ── STATS TAB ───────────────────────────────────────────── -->
+<div class="tab-content" id="tab-stats">
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Alerts</div>
+      <div class="stat-value red" id="s-alerts">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Faces Seen</div>
+      <div class="stat-value" id="s-faces">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last Check</div>
+      <div class="stat-value" id="s-check" style="font-size:14px;">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last Alert</div>
+      <div class="stat-value" id="s-alert-t" style="font-size:14px;">—</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="stat-card" style="margin-bottom:8px;">
+    <div class="stat-label">Profile Status</div>
+    <div class="stat-value green" id="s-profile" style="font-size:14px;">—</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-label">Guard Status</div>
+    <div class="stat-value" id="s-status" style="font-size:14px;">IDLE</div>
+  </div>
+
+  <div class="divider"></div>
+  <button class="btn danger" id="reset-stats-btn" style="width:100%">Reset Stats</button>
+
+</div>
+
+<script>
+'use strict';
+
+// ── State ─────────────────────────────────────────────────────
+let currentState = { enabled: false, status: 'idle', alertCount: 0, lastCheck: 0, lastAlert: 0, faceCount: 0, profileExists: false };
+let settings = { mode: 'switch', interval: 3, sensitivity: 60, brightness: 100, decoyUrl: 'about:blank', noFaceAction: 'ignore' };
+let trainStream = null;
+let capturedDescriptors = [];
+const MAX_SAMPLES = 10;
+
+// ── UI References ─────────────────────────────────────────────
+const masterToggle   = document.getElementById('master-toggle');
+const statusBadge    = document.getElementById('status-badge');
+const statusText     = document.getElementById('status-text');
+const shield         = document.getElementById('shield');
+const guardTitle     = document.getElementById('guard-title');
+const guardSub       = document.getElementById('guard-sub');
+const statAlerts     = document.getElementById('stat-alerts');
+const statLast       = document.getElementById('stat-last');
+const alertStrip     = document.getElementById('alert-strip');
+
+// Settings
+const intervalSlider   = document.getElementById('interval-slider');
+const intervalVal      = document.getElementById('interval-val');
+const sensitivitySlider = document.getElementById('sensitivity-slider');
+const sensitivityVal   = document.getElementById('sensitivity-val');
+const brightnessSlider = document.getElementById('brightness-slider');
+const brightnessVal    = document.getElementById('brightness-val');
+const decoyUrlInput    = document.getElementById('decoy-url');
+const saveBtn          = document.getElementById('save-btn');
+
+// Train
+const trainVideo       = document.getElementById('train-video');
+const trainCanvas      = document.getElementById('train-canvas');
+const camOverlay       = document.getElementById('cam-overlay');
+const camBtn           = document.getElementById('cam-btn');
+const captureBtn       = document.getElementById('capture-btn');
+const saveProfileBtn   = document.getElementById('save-profile-btn');
+const clearProfileBtn  = document.getElementById('clear-profile-btn');
+const sampleCountEl    = document.getElementById('sample-count');
+const samplePips       = document.getElementById('sample-pips');
+const profileDot       = document.getElementById('profile-dot');
+const profileText      = document.getElementById('profile-text');
+
+// Stats
+const sAlerts   = document.getElementById('s-alerts');
+const sFaces    = document.getElementById('s-faces');
+const sCheck    = document.getElementById('s-check');
+const sAlertT   = document.getElementById('s-alert-t');
+const sProfile  = document.getElementById('s-profile');
+const sStatus   = document.getElementById('s-status');
+const resetStatsBtn = document.getElementById('reset-stats-btn');
+
+// ── Init ──────────────────────────────────────────────────────
+function init() {
+  // Load settings from storage
+  chrome.storage.local.get(['settings', 'faceProfile'], (data) => {
+    if (data.settings) {
+      settings = { ...settings, ...data.settings };
+      applySettingsToUI();
+    }
+    currentState.profileExists = !!(data.faceProfile && data.faceProfile.length > 0);
+    updateProfileBadge();
+  });
+
+  // Get current state from background
+  chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (res) => {
+    if (res) {
+      currentState = { ...currentState, ...res };
+      masterToggle.checked = currentState.enabled;
+      renderState();
+    }
+  });
+
+  buildPips();
+}
+
+// ── Render State ──────────────────────────────────────────────
+function renderState() {
+  const { enabled, status, alertCount, lastCheck, lastAlert, faceCount, profileExists } = currentState;
+
+  // Badge
+  statusBadge.className = 'status-badge ' + (enabled ? status : '');
+  statusText.textContent = enabled ? status.toUpperCase().replace('-', ' ') : 'IDLE';
+
+  // Shield
+  shield.className = 'shield-bg ' + (enabled ? status : '');
+
+  // Guard card text
+  if (!enabled) {
+    shield.textContent = '⊙';
+    guardTitle.textContent = 'Protection Off';
+    guardSub.textContent = 'Toggle to start monitoring';
+  } else if (status === 'loading') {
+    shield.textContent = '◌';
+    guardTitle.textContent = 'Starting…';
+    guardSub.textContent = 'Loading models & camera';
+  } else if (status === 'no-profile') {
+    shield.textContent = '⊘';
+    guardTitle.textContent = 'No Profile';
+    guardSub.textContent = 'Train your face to activate';
+  } else if (status === 'watching') {
+    shield.textContent = '◉';
+    guardTitle.textContent = 'Protected';
+    guardSub.textContent = faceCount > 0 ? `${faceCount} authorized face${faceCount > 1 ? 's' : ''} detected` : 'Scanning…';
+  } else if (status === 'alert') {
+    shield.textContent = '⊗';
+    guardTitle.textContent = 'Alert!';
+    guardSub.textContent = 'Unknown face detected';
+  }
+
+  statAlerts.textContent = alertCount;
+  statLast.textContent = lastAlert ? timeAgo(lastAlert) : '—';
+
+  alertStrip.classList.toggle('visible', status === 'alert');
+
+  // Stats tab
+  sAlerts.textContent = alertCount;
+  sFaces.textContent = faceCount;
+  sCheck.textContent = lastCheck ? timeAgo(lastCheck) : '—';
+  sAlertT.textContent = lastAlert ? timeAgo(lastAlert) : '—';
+  sProfile.textContent = profileExists ? 'ENROLLED' : 'NONE';
+  sStatus.textContent = enabled ? status.toUpperCase().replace('-', ' ') : 'IDLE';
+}
+
+function timeAgo(ts) {
+  if (!ts) return '—';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
+
+// Refresh relative times every 5s
+setInterval(() => renderState(), 5000);
+
+// ── Toggle ────────────────────────────────────────────────────
+masterToggle.addEventListener('change', () => {
+  const enabled = masterToggle.checked;
+  masterToggle.disabled = true;
+
+  chrome.runtime.sendMessage({ type: 'TOGGLE_GUARD', enabled }, (res) => {
+    masterToggle.disabled = false;
+    if (res && res.state) {
+      currentState = { ...currentState, ...res.state };
+    }
+    currentState.enabled = enabled;
+    renderState();
+  });
+});
+
+// ── State Updates from Background ─────────────────────────────
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'STATE_UPDATE') {
+    currentState = { ...currentState, ...msg.state };
+    masterToggle.checked = currentState.enabled;
+    renderState();
+  }
+});
+
+// ── Tabs ──────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Settings ──────────────────────────────────────────────────
+function applySettingsToUI() {
+  intervalSlider.value = settings.interval;
+  intervalVal.textContent = settings.interval + 's';
+
+  sensitivitySlider.value = settings.sensitivity;
+  sensitivityVal.textContent = settings.sensitivity + '%';
+
+  brightnessSlider.value = settings.brightness;
+  brightnessVal.textContent = settings.brightness + '%';
+
+  decoyUrlInput.value = settings.decoyUrl || 'about:blank';
+
+  document.querySelectorAll('.seg-btn[data-mode]').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === settings.mode);
+  });
+
+  document.querySelectorAll('.seg-btn[data-noface]').forEach(b => {
+    b.classList.toggle('active', b.dataset.noface === settings.noFaceAction);
+  });
+}
+
+intervalSlider.addEventListener('input', () => {
+  intervalVal.textContent = intervalSlider.value + 's';
+});
+sensitivitySlider.addEventListener('input', () => {
+  sensitivityVal.textContent = sensitivitySlider.value + '%';
+});
+brightnessSlider.addEventListener('input', () => {
+  brightnessVal.textContent = brightnessSlider.value + '%';
+});
+
+document.querySelectorAll('.seg-btn[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.seg-btn[data-mode]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    settings.mode = btn.dataset.mode;
+  });
+});
+
+document.querySelectorAll('.seg-btn[data-noface]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.seg-btn[data-noface]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    settings.noFaceAction = btn.dataset.noface;
+  });
+});
+
+saveBtn.addEventListener('click', () => {
+  settings.interval = parseInt(intervalSlider.value);
+  settings.sensitivity = parseInt(sensitivitySlider.value);
+  settings.brightness = parseInt(brightnessSlider.value);
+  settings.decoyUrl = decoyUrlInput.value.trim() || 'about:blank';
+
+  chrome.storage.local.set({ settings }, () => {
+    chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED', settings });
+    saveBtn.textContent = '✓ Saved';
+    setTimeout(() => { saveBtn.textContent = 'Save Settings'; }, 1500);
+  });
+});
+
+// ── Train ─────────────────────────────────────────────────────
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+let faceApiLoaded = false;
+let loadingModels = false;
+
+async function ensureFaceApi() {
+  if (typeof faceapi !== 'undefined' && faceApiLoaded) return true;
+  if (loadingModels) return false;
+  loadingModels = true;
+
+  return new Promise(async (resolve) => {
+    if (typeof faceapi === 'undefined') {
+      resolve(false);
+      return;
+    }
+    try {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+      faceApiLoaded = true;
+      resolve(true);
+    } catch (e) {
+      resolve(false);
+    }
+    loadingModels = false;
+  });
+}
+
+camBtn.addEventListener('click', async () => {
+  if (trainStream) {
+    stopTrainCamera();
+    return;
+  }
+
+  camBtn.textContent = 'Starting…';
+  camBtn.disabled = true;
+
+  try {
+    trainStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    trainVideo.srcObject = trainStream;
+    trainVideo.play();
+    camOverlay.classList.add('hidden');
+    camBtn.textContent = 'Stop Camera';
+    camBtn.disabled = false;
+    captureBtn.disabled = false;
+
+    // Load face-api in background
+    camBtn.textContent = 'Loading models…';
+    const ok = await ensureFaceApi();
+    camBtn.textContent = ok ? 'Stop Camera' : 'Stop Camera (no models)';
+    captureBtn.disabled = !ok;
+  } catch (e) {
+    camBtn.textContent = 'Permission denied';
+    camBtn.disabled = false;
+  }
+});
+
+function stopTrainCamera() {
+  if (trainStream) {
+    trainStream.getTracks().forEach(t => t.stop());
+    trainStream = null;
+  }
+  trainVideo.srcObject = null;
+  camOverlay.classList.remove('hidden');
+  camBtn.textContent = 'Start Camera';
+  captureBtn.disabled = true;
+}
+
+captureBtn.addEventListener('click', async () => {
+  if (!trainStream || !faceApiLoaded) return;
+  if (capturedDescriptors.length >= MAX_SAMPLES) return;
+
+  captureBtn.disabled = true;
+  captureBtn.textContent = 'Detecting…';
+
+  trainCanvas.width = trainVideo.videoWidth || 320;
+  trainCanvas.height = trainVideo.videoHeight || 240;
+  const ctx = trainCanvas.getContext('2d');
+  // mirror to match mirrored video display
+  ctx.translate(trainCanvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(trainVideo, 0, 0);
+  ctx.setTransform(1,0,0,1,0,0);
+
+  try {
+    const detections = await faceapi
+      .detectSingleFace(trainCanvas, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.3 }))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!detections) {
+      captureBtn.textContent = 'No face found';
+      setTimeout(() => {
+        captureBtn.textContent = 'Capture';
+        captureBtn.disabled = false;
+      }, 1500);
+      return;
+    }
+
+    capturedDescriptors.push(Array.from(detections.descriptor));
+    updateSamplePips();
+    sampleCountEl.textContent = capturedDescriptors.length;
+
+    if (capturedDescriptors.length >= 3) {
+      saveProfileBtn.disabled = false;
+    }
+    if (capturedDescriptors.length >= MAX_SAMPLES) {
+      captureBtn.disabled = true;
+      captureBtn.textContent = 'Max samples';
+    } else {
+      captureBtn.textContent = '✓ Got it!';
+      setTimeout(() => {
+        captureBtn.textContent = 'Capture';
+        captureBtn.disabled = false;
+      }, 800);
+    }
+  } catch (e) {
+    captureBtn.textContent = 'Error';
+    setTimeout(() => {
+      captureBtn.textContent = 'Capture';
+      captureBtn.disabled = false;
+    }, 1500);
+  }
+});
+
+saveProfileBtn.addEventListener('click', () => {
+  if (capturedDescriptors.length < 3) return;
+  chrome.storage.local.set({ faceProfile: capturedDescriptors }, () => {
+    currentState.profileExists = true;
+    updateProfileBadge();
+    chrome.runtime.sendMessage({ type: 'PROFILE_UPDATED', exists: true });
+    saveProfileBtn.textContent = '✓ Saved!';
+    setTimeout(() => { saveProfileBtn.textContent = 'Save Profile'; }, 1500);
+    stopTrainCamera();
+    capturedDescriptors = [];
+    sampleCountEl.textContent = '0';
+    updateSamplePips();
+    saveProfileBtn.disabled = true;
+  });
+});
+
+clearProfileBtn.addEventListener('click', () => {
+  chrome.storage.local.remove('faceProfile', () => {
+    currentState.profileExists = false;
+    updateProfileBadge();
+    chrome.runtime.sendMessage({ type: 'PROFILE_UPDATED', exists: false });
+    capturedDescriptors = [];
+    sampleCountEl.textContent = '0';
+    updateSamplePips();
+    saveProfileBtn.disabled = true;
+    clearProfileBtn.textContent = '✓ Cleared';
+    setTimeout(() => { clearProfileBtn.textContent = 'Clear Profile'; }, 1500);
+  });
+});
+
+function buildPips() {
+  samplePips.innerHTML = '';
+  for (let i = 0; i < MAX_SAMPLES; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'pip';
+    samplePips.appendChild(pip);
+  }
+}
+
+function updateSamplePips() {
+  document.querySelectorAll('.pip').forEach((pip, i) => {
+    pip.classList.toggle('filled', i < capturedDescriptors.length);
+  });
+}
+
+function updateProfileBadge() {
+  profileDot.classList.toggle('ok', currentState.profileExists);
+  profileText.textContent = currentState.profileExists ? 'Profile enrolled ✓' : 'No profile enrolled';
+}
+
+// ── Stats ─────────────────────────────────────────────────────
+resetStatsBtn.addEventListener('click', () => {
+  currentState.alertCount = 0;
+  currentState.lastAlert = 0;
+  currentState.lastCheck = 0;
+  renderState();
+  resetStatsBtn.textContent = '✓ Reset';
+  setTimeout(() => { resetStatsBtn.textContent = 'Reset Stats'; }, 1500);
+});
+
+// ── Boot ──────────────────────────────────────────────────────
+init();
+</script>
+
+<!-- Load face-api for training tab -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</body>
+</html>
